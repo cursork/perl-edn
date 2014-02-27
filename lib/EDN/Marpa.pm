@@ -21,7 +21,8 @@ Nil ::= 'nil' action => nil
 Boolean ::= 'true'  action => boolean
           | 'false' action => boolean
 
-EDN_many ::= EDN | EDN EDN_many action => cons
+EDN_many ::= EDN          action => list
+           | EDN EDN_many action => cons
 
 Vector ::= '[]' action => empty_vector
          | '[' EDN_many ']' action => vector
@@ -79,10 +80,10 @@ Discard ::= "#_"
 
 my $grammar = Marpa::R2::Scanless::G->new({ source => \$raw_grammar });
 my $recce   = Marpa::R2::Scanless::R->new({ grammar => $grammar, semantics_package => 'EDN::Marpa::Semantics'
-	, trace_terminals => 1
+		# , trace_terminals => 1
 });
 
-sub do_it {
+sub parse {
 	my ($input) = @_;
 	$recce->read( \$input );
 
@@ -96,13 +97,10 @@ package EDN::Marpa::Semantics;
 sub nil          { EDN::Marpa::Semantics::Nil->new }
 sub boolean      { EDN::Marpa::Semantics::Boolean->new(truth => ($_[1] eq 'true')) }
 sub empty_vector { [] }
-sub vector       { shift, shift and pop; return shift; } # Already constructed by EDN many into an array ref
+sub vector       { shift, shift and pop; shift; } # Already constructed by EDN many into an array ref
 sub whitespace   { EDN::Marpa::Semantics::Whitespace->new(chars => $_[1]) }
-sub cons         {
-	my (undef, $car, $cdr) = @_;
-	$cdr = [$cdr] unless ref $cdr eq 'ARRAY';
-	[$car, @$cdr];
-}
+sub list         { shift; [shift] }
+sub cons         { shift; [shift, @{shift @_}] }
 
 package EDN::Marpa::Semantics::Nil;
 use Moo;
@@ -119,9 +117,11 @@ has truth => (is => 'ro');
 
 package main;
 
-my $parsed = EDN::Marpa::do_it('[true false true true false nil]');
-say '-------';
-say Data::Dumper->Dump([$parsed]);
+caller or do {
+	my $parsed = EDN::Marpa::parse('[true false true true false nil]');
+	say '-------';
+	say Data::Dumper->Dump([$parsed]);
+};
 
 __END__
 
