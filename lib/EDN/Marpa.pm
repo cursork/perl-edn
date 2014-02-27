@@ -14,13 +14,17 @@ my $raw_grammar = <<'BNF'; #{{{1
 :start ::= EDN
 EDN ::= Nil | Boolean | Vector
 
-Whitespace ::= ws action => whitespace
-ws ~ [\s,]+
+:discard ~ whitespace
+whitespace ~ [\s,]+
 
 Nil ::= 'nil' action => nil
-Boolean ::= 'true' | 'false' action => boolean
+Boolean ::= 'true'  action => boolean
+          | 'false' action => boolean
 
-Vector ::= '[' (EDN Whitespace)+ ']' action => vector
+EDN_many ::= EDN | EDN EDN_many action => cons
+
+Vector ::= '[]' action => empty_vector
+         | '[' EDN_many ']' action => vector
 BNF
 # }}}1
 
@@ -89,10 +93,16 @@ sub do_it {
 
 package EDN::Marpa::Semantics;
 
-sub nil     { EDN::Marpa::Semantics::Nil->new }
-sub boolean { EDN::Marpa::Semantics::Boolean->new(truth => ($_[1] eq 'true')) }
-sub vector  { shift, shift and pop; return [@_] }
-sub whitespace { EDN::Marpa::Semantics::Whitespace->new(chars => $_[1]) }
+sub nil          { EDN::Marpa::Semantics::Nil->new }
+sub boolean      { EDN::Marpa::Semantics::Boolean->new(truth => ($_[1] eq 'true')) }
+sub empty_vector { [] }
+sub vector       { shift, shift and pop; return shift; } # Already constructed by EDN many into an array ref
+sub whitespace   { EDN::Marpa::Semantics::Whitespace->new(chars => $_[1]) }
+sub cons         {
+	my (undef, $car, $cdr) = @_;
+	$cdr = [$cdr] unless ref $cdr eq 'ARRAY';
+	[$car, @$cdr];
+}
 
 package EDN::Marpa::Semantics::Nil;
 use Moo;
@@ -109,7 +119,7 @@ has truth => (is => 'ro');
 
 package main;
 
-my $parsed = EDN::Marpa::do_it('[false ]');
+my $parsed = EDN::Marpa::do_it('[true false true true false nil]');
 say '-------';
 say Data::Dumper->Dump([$parsed]);
 
