@@ -20,9 +20,11 @@ parsed_is('true',  true,  'true');
 parsed_is('false', false, 'false');
 
 parsed_is('[]', [], 'Empty vector');
+parsed_is("[ \t\n\n,,,]", [], 'Empty vector, mixed whitespace');
 parsed_is('[true true false]', [true, true, false], 'TTF vector');
 
 parsed_is('{}', {}, 'Empty hash');
+parsed_is('{ ,, }', {}, 'Empty hash, with whitespace');
 parsed_is('{ true false, false true }', {1 => '', '' => 1}, 'True is false and false is true (hashmap)');
 
 parsed_is '123',  123, 'Basic integer';

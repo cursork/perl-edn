@@ -30,10 +30,10 @@ digits ~ [\d]+
 Integer ::= digits 'N' action => integer
           | digits     action => integer
 
-Vector ::= '[]' action => empty_vector
+Vector ::= '[' ']' action => empty_vector
          | '[' EDN_many ']' action => vector
 
-HashMap ::= '{}' action => empty_hash
+HashMap ::= '{' '}' action => empty_hash
           | '{' EDN_many '}' action => make_hash
 BNF
 # }}}1
