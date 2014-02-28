@@ -12,8 +12,12 @@ use Marpa::R2;
 my $raw_grammar = <<'BNF'; #{{{1
 :default ::= action => ::first
 :start ::= EDN
-EDN ::= Nil | Boolean | Vector
+EDN ::= Nil | Boolean | Integer | Vector | HashMap
 
+EDN_many ::= EDN          action => list
+           | EDN EDN_many action => cons
+
+# Discard whitespace (not bothered about reproducing it)
 :discard ~ whitespace
 whitespace ~ [\s,]+
 
@@ -21,11 +25,16 @@ Nil ::= 'nil' action => nil
 Boolean ::= 'true'  action => boolean
           | 'false' action => boolean
 
-EDN_many ::= EDN          action => list
-           | EDN EDN_many action => cons
+# Numbers
+digits ~ [\d]+
+Integer ::= digits 'N' action => integer
+          | digits     action => integer
 
 Vector ::= '[]' action => empty_vector
          | '[' EDN_many ']' action => vector
+
+HashMap ::= '{}' action => empty_hash
+          | '{' EDN_many '}' action => make_hash
 BNF
 # }}}1
 
@@ -79,12 +88,12 @@ Discard ::= "#_"
 # }}}1
 
 my $grammar = Marpa::R2::Scanless::G->new({ source => \$raw_grammar });
-my $recce   = Marpa::R2::Scanless::R->new({ grammar => $grammar, semantics_package => 'EDN::Marpa::Semantics'
-		# , trace_terminals => 1
-});
 
 sub parse {
 	my ($input) = @_;
+	my $recce   = Marpa::R2::Scanless::R->new({ grammar => $grammar, semantics_package => 'EDN::Marpa::Semantics'
+			# , trace_terminals => 1
+		});
 	$recce->read( \$input );
 
 	my $value_ref = $recce->value;
@@ -96,11 +105,14 @@ package EDN::Marpa::Semantics;
 
 sub nil          { EDN::Marpa::Semantics::Nil->new }
 sub boolean      { EDN::Marpa::Semantics::Boolean->new(truth => ($_[1] eq 'true')) }
-sub empty_vector { [] }
-sub vector       { shift, shift and pop; shift; } # Already constructed by EDN many into an array ref
 sub whitespace   { EDN::Marpa::Semantics::Whitespace->new(chars => $_[1]) }
+sub integer      { shift; shift }
+sub empty_vector { [] }
+sub vector       { shift, shift and pop; shift } # Already constructed by EDN many into an array ref
 sub list         { shift; [shift] }
 sub cons         { shift; [shift, @{shift @_}] }
+sub empty_hash   { {} }
+sub make_hash    { shift, shift and pop; +{@{shift @_}} }
 
 package EDN::Marpa::Semantics::Nil;
 use Moo;
@@ -113,12 +125,15 @@ has chars => (is => 'ro');
 package EDN::Marpa::Semantics::Boolean;
 use Moo;
 
+use overload
+	'""' => sub { shift->truth };
+
 has truth => (is => 'ro');
 
 package main;
 
 caller or do {
-	my $parsed = EDN::Marpa::parse('[true false true true false nil]');
+	my $parsed = EDN::Marpa::parse('{true false true true false nil}');
 	say '-------';
 	say Data::Dumper->Dump([$parsed]);
 };
